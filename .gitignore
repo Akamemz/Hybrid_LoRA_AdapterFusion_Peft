@@ -1,2 +1,8 @@
 ML_Project/src/main/.DS_Store
 .DS_Store
+.idea/vcs.xml
+.idea/modules.xml
+.idea/misc.xml
+.idea/inspectionProfiles/Project_Default.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/Hybrid_LoRA-Data-Centric_Improvements.iml
