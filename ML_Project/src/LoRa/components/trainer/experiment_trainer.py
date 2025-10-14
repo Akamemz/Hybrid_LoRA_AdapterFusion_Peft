@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, Optional
 from datasets import DatasetDict
 from transformers import PreTrainedModel, PreTrainedTokenizer, TrainingArguments, Trainer, DataCollatorWithPadding
-from .base import BaseTrainer
+from LoRa.components.peft.base import BaseTrainer
 
 
 class ExperimentTrainer(BaseTrainer):

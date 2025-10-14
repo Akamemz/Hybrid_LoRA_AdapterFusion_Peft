@@ -12,8 +12,8 @@ from typing import Dict, List
 import pandas as pd
 from pathlib import Path
 
-# Import your main runner
-from src.main.main_experiment_runner import main as run_single_experiment
+# Import main runner
+from main.main_experiment_runner import main as run_single_experiment
 
 
 class ExperimentOrchestrator:

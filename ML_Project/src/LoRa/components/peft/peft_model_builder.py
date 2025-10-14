@@ -3,18 +3,21 @@ from transformers import PreTrainedModel
 from peft import (
     get_peft_model,
     LoraConfig,
-    AdapterConfig,
     TaskType,
     PeftModel,
-    PeftConfig
 )
+
 from .base import BasePeftBuilder
 
 
 class PeftModelBuilder(BasePeftBuilder):
     """
     Applies various PEFT configurations to a given transformer model.
-    Supports LoRA, Adapters, AdapterFusion, and Hybrid approaches.
+    Currently supports: LoRA and LoRA-based hybrid approaches.
+
+    Note: This implementation uses the PEFT library which primarily supports LoRA.
+    For true adapter-based methods and AdapterFusion, you would need the
+    'adapter-transformers' library instead.
     """
 
     def __init__(self, model: PreTrainedModel):
@@ -42,9 +45,8 @@ class PeftModelBuilder(BasePeftBuilder):
         Args:
             peft_config (Dict): A dictionary specifying the PEFT method and its params.
                                 Example: {'method': 'lora', 'r': 8, 'lora_alpha': 16}
-                                     or: {'method': 'adapter', 'reduction_factor': 16}
-                                     or: {'method': 'adapter_fusion', 'adapters': ['adapter1', 'adapter2']}
-                                     or: {'method': 'hybrid', 'lora_config': {...}, 'adapter_configs': [...]}
+                                     or: {'method': 'bottleneck', 'r': 8}
+                                     or: {'method': 'hybrid', 'lora_config': {...}, 'bottleneck_config': {...}}
 
         Returns:
             The modified model with the PEFT configuration applied.
@@ -59,10 +61,16 @@ class PeftModelBuilder(BasePeftBuilder):
             peft_model = self._apply_lora(peft_config)
 
         elif method == "adapter":
-            peft_model = self._apply_adapter(peft_config)
+            # Use bottleneck adapter implementation via LoRA on FFN layers
+            print("Note: Using bottleneck adapter simulation via LoRA on FFN layers")
+            peft_model = self._apply_bottleneck_adapter(peft_config)
 
         elif method == "adapter_fusion":
-            peft_model = self._apply_adapter_fusion(peft_config)
+            raise NotImplementedError(
+                "AdapterFusion requires the 'adapter-transformers' library. "
+                "The PEFT library does not support AdapterFusion. "
+                "Please install adapter-transformers: pip install adapter-transformers"
+            )
 
         elif method == "hybrid":
             peft_model = self._apply_hybrid(peft_config)
@@ -104,97 +112,98 @@ class PeftModelBuilder(BasePeftBuilder):
         print(f"LoRA configuration applied successfully with r={lora_config.r}")
         return peft_model
 
-    def _apply_adapter(self, peft_config: Dict) -> PreTrainedModel:
-        """Apply Adapter configuration to the model."""
-        # Adapter configuration (similar to Houlsby et al.)
-        adapter_config = AdapterConfig(
-            reduction_factor=peft_config.get("reduction_factor", 16),
-            non_linearity=peft_config.get("non_linearity", "relu"),
-            task_type=TaskType.SEQ_CLS,
-            # adapter_type can be "houlsby" or "pfeiffer"
-            adapter_type=peft_config.get("adapter_type", "houlsby")
+    def _apply_bottleneck_adapter(self, peft_config: Dict) -> PreTrainedModel:
+        """
+        Simulate bottleneck adapters using LoRA on FFN layers.
+        This is a workaround since PEFT doesn't natively support adapters.
+
+        For true adapter implementation, use adapter-transformers library.
+        """
+        # Target FFN/MLP layers to simulate adapter behavior
+        model_type = self.model.config.model_type
+
+        if model_type == "distilbert":
+            # DistilBERT has FFN in each transformer block
+            target_modules = ["ffn.lin1", "ffn.lin2"]
+        elif model_type in ["bert", "roberta"]:
+            target_modules = ["intermediate.dense", "output.dense"]
+        elif model_type == "gpt2":
+            target_modules = ["mlp.c_fc", "mlp.c_proj"]
+        else:
+            # Fallback
+            target_modules = ["intermediate", "output"]
+
+        # Convert reduction_factor to LoRA rank
+        # reduction_factor of 16 ≈ r of 48 for 768-dim models
+        reduction_factor = peft_config.get("reduction_factor", 16)
+        hidden_size = self.model.config.hidden_size
+        r = max(4, hidden_size // reduction_factor)
+
+        lora_config = LoraConfig(
+            r=r,
+            lora_alpha=r * 2,  # Common practice: alpha = 2*r
+            target_modules=target_modules,
+            lora_dropout=peft_config.get("dropout", 0.1),
+            bias="none",
+            task_type=TaskType.SEQ_CLS
         )
 
-        adapter_name = peft_config.get("adapter_name", "default_adapter")
-        peft_model = get_peft_model(self.model, adapter_config, adapter_name=adapter_name)
-
-        print(f"Adapter '{adapter_name}' applied with reduction_factor={adapter_config.reduction_factor}")
-        return peft_model
-
-    def _apply_adapter_fusion(self, peft_config: Dict) -> PreTrainedModel:
-        """
-        Apply AdapterFusion by loading pre-trained adapters and adding fusion layer.
-
-        Note: This requires pre-trained adapter checkpoints.
-        """
-        adapter_paths = peft_config.get("adapter_paths", [])
-        fusion_config = peft_config.get("fusion_config", {})
-
-        if not adapter_paths:
-            raise ValueError("AdapterFusion requires 'adapter_paths' to be specified")
-
-        # Start with the base model
-        peft_model = self.model
-
-        # Load each pre-trained adapter
-        for i, adapter_path in enumerate(adapter_paths):
-            adapter_name = f"adapter_{i}"
-            print(f"Loading adapter from {adapter_path} as '{adapter_name}'")
-
-            # Load adapter config and weights
-            peft_model = PeftModel.from_pretrained(
-                peft_model,
-                adapter_path,
-                adapter_name=adapter_name
-            )
-
-        # Apply fusion configuration
-        # Note: The actual fusion layer implementation depends on the PEFT library version
-        # This is a simplified version
-        print(f"AdapterFusion configured with {len(adapter_paths)} adapters")
-
-        # Set all adapters to eval mode except the fusion layer
-        for adapter_name in peft_model.peft_config:
-            peft_model.set_adapter(adapter_name)
-            for param in peft_model.parameters():
-                param.requires_grad = False
-
-        # The fusion layer parameters should remain trainable
-        # (Implementation depends on PEFT library support for fusion)
-
+        peft_model = get_peft_model(self.model, lora_config)
+        print(f"Bottleneck adapter (via LoRA on FFN) applied with r={r} (reduction_factor={reduction_factor})")
         return peft_model
 
     def _apply_hybrid(self, peft_config: Dict) -> PreTrainedModel:
         """
-        Apply Hybrid approach: LoRA + Adapters/AdapterFusion
+        Apply Hybrid approach: LoRA on attention + LoRA on FFN (simulating adapters)
 
-        This method combines multiple PEFT techniques on the same model.
+        This simulates the hybrid LoRA+Adapter approach by applying LoRA to both
+        attention and FFN layers simultaneously.
         """
-        print("Applying Hybrid PEFT configuration...")
+        print("Applying Hybrid PEFT configuration (LoRA on attention + FFN)...")
 
-        # First apply LoRA
-        lora_config = peft_config.get("lora_config", {})
-        if lora_config:
-            lora_config["method"] = "lora"
-            self.model = self._apply_lora(lora_config)
-            print("LoRA component applied")
+        model_type = self.model.config.model_type
 
-        # Then apply Adapters or AdapterFusion
-        adapter_config = peft_config.get("adapter_config", {})
-        if adapter_config:
-            if adapter_config.get("use_fusion", False):
-                # Apply AdapterFusion on top of LoRA
-                adapter_config["method"] = "adapter_fusion"
-                peft_model = self._apply_adapter_fusion(adapter_config)
-            else:
-                # Apply regular adapters on top of LoRA
-                adapter_config["method"] = "adapter"
-                peft_model = self._apply_adapter(adapter_config)
-            print("Adapter component applied")
+        # Get attention targets
+        if model_type == "distilbert":
+            attention_targets = ["q_lin", "v_lin"]
+            ffn_targets = ["ffn.lin1", "ffn.lin2"]
+        elif model_type in ["bert", "roberta"]:
+            attention_targets = ["query", "value"]
+            ffn_targets = ["intermediate.dense", "output.dense"]
+        elif model_type == "gpt2":
+            attention_targets = ["c_attn"]
+            ffn_targets = ["mlp.c_fc", "mlp.c_proj"]
         else:
-            peft_model = self.model
+            attention_targets = ["query", "value"]
+            ffn_targets = ["intermediate", "output"]
 
-        print("Hybrid configuration complete")
+        # Combine targets
+        all_targets = attention_targets + ffn_targets
+
+        # Get configs
+        lora_config_dict = peft_config.get("lora_config", {})
+        adapter_config_dict = peft_config.get("adapter_config", {})
+
+        # Use LoRA r for attention, derive FFN r from reduction_factor
+        lora_r = lora_config_dict.get("r", 8)
+        reduction_factor = adapter_config_dict.get("reduction_factor", 16)
+        hidden_size = self.model.config.hidden_size
+        adapter_r = max(4, hidden_size // reduction_factor)
+
+        # Average the two ranks for a compromise
+        combined_r = (lora_r + adapter_r) // 2
+
+        lora_config = LoraConfig(
+            r=combined_r,
+            lora_alpha=combined_r * 2,
+            target_modules=all_targets,
+            lora_dropout=lora_config_dict.get("lora_dropout", 0.1),
+            bias="none",
+            task_type=TaskType.SEQ_CLS
+        )
+
+        peft_model = get_peft_model(self.model, lora_config)
+        print(f"Hybrid configuration complete: r={combined_r}, targeting {len(all_targets)} module types")
         return peft_model
 
     def get_trainable_parameters_info(self, model: PreTrainedModel) -> Dict:
