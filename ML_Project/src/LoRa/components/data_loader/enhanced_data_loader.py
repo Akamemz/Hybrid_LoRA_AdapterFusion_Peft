@@ -316,7 +316,12 @@ class UnifiedDatasetLoader(BaseDataLoader):
                 max_length=self.max_length,
             )
 
-        tokenized = dataset.map(tokenize_function, batched=True)
+        # ADD load_from_cache_file=False to disable caching
+        tokenized = dataset.map(
+            tokenize_function,
+            batched=True,
+            load_from_cache_file=False  # ADD THIS LINE
+        )
         return tokenized
 
     def _format_for_training(self, dataset: DatasetDict) -> DatasetDict:
@@ -324,11 +329,25 @@ class UnifiedDatasetLoader(BaseDataLoader):
         text_col = self.config["text_column"]
         label_col = self.config["label_column"]
 
-        # Remove text column (already tokenized)
-        dataset = dataset.remove_columns([text_col])
+        # Get all column names
+        all_columns = dataset["train"].column_names
+
+        # Columns to keep: input_ids, attention_mask, and labels
+        columns_to_keep = ["input_ids", "attention_mask"]
+
+        # Columns to remove: everything except what we need
+        columns_to_remove = [
+            col for col in all_columns
+            if col not in columns_to_keep and col != label_col
+        ]
+
+        # Remove unwanted columns (including 'idx', original text column, etc.)
+        if columns_to_remove:
+            dataset = dataset.remove_columns(columns_to_remove)
+            print(f"  Removed columns: {columns_to_remove}")
 
         # Rename label column to 'labels' (HF Trainer expectation)
-        if label_col != "labels":
+        if label_col != "labels" and label_col in dataset["train"].column_names:
             dataset = dataset.rename_column(label_col, "labels")
 
         # Set format to PyTorch tensors

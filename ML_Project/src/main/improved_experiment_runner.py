@@ -1,11 +1,16 @@
 """
-ML_Project/src/main/improved_experiment_runner.py
+Use this in terminal to run the script
 
-Improved experiment runner with:
-- Unified PEFT factory usage
-- Enhanced dataset support
-- Parameter budget enforcement
-- Comprehensive logging
+python -m src.main.improved_experiment_runner \
+  --experiment_name ba_lora_test \
+  --dataset sst2 \
+  --peft_method ba_lora \
+  --param_budget 75000 \
+  --ba_lora_base_rank 4 \
+  --ba_lora_gradient_samples 1000 \
+  --ba_lora_use_warmstart \
+  --epochs 3
+
 """
 
 import os
@@ -50,29 +55,25 @@ class ImprovedExperimentRunner:
         print(f"{'=' * 80}\n")
 
     def run(self) -> Dict:
-        """
-        Execute complete experiment pipeline.
-
-        Returns:
-            Dictionary containing all experiment results
-        """
+        """Execute complete experiment pipeline."""
         start_time = datetime.now()
 
         # Step 1: Load base model and tokenizer
         print("[1/5] Loading base model and tokenizer...")
         base_model, tokenizer = self._load_model()
 
+
         # Step 2: Load and prepare dataset
         print("\n[2/5] Loading and preparing dataset...")
-        dataset = self._load_dataset(tokenizer)
+        self.dataset = self._load_dataset(tokenizer)  # CHANGE: add self.
 
         # Step 3: Build PEFT model with budget enforcement
         print("\n[3/5] Building PEFT model...")
-        peft_model = self._build_peft_model(base_model)
+        peft_model = self._build_peft_model(base_model, tokenizer)  # ADD tokenizer
 
         # Step 4: Train model
         print("\n[4/5] Training model...")
-        eval_results = self._train_model(peft_model, tokenizer, dataset)
+        eval_results = self._train_model(peft_model, tokenizer, self.dataset)  # Use self.dataset
 
         # Step 5: Save results
         print("\n[5/5] Saving results...")
@@ -118,22 +119,16 @@ class ImprovedExperimentRunner:
         )
         return data_loader.load_and_prepare(tokenizer)
 
-    def _build_peft_model(self, base_model):
+    def _build_peft_model(self, base_model, tokenizer):  # ADD tokenizer parameter
         """Build PEFT model with configuration and budget enforcement."""
-        # Initialize factory with parameter budget
+        # Initialize factory with parameter budget AND tokenizer
         factory = PEFTFactory(
             base_model=base_model,
+            tokenizer=tokenizer,  # ADD THIS
             target_param_budget=self.args.param_budget
         )
 
         # If no budget specified, suggest matching configurations
-        if not self.args.param_budget and self.args.suggest_configs:
-            factory.suggest_matching_configs(
-                base_r=self.args.lora_r,
-                base_reduction=self.args.adapter_reduction_factor
-            )
-
-        # Build PEFT configuration based on method
         if self.args.peft_method == "lora":
             config = {
                 "r": self.args.lora_r,
@@ -142,46 +137,24 @@ class ImprovedExperimentRunner:
                 "lora_dropout": self.args.lora_dropout,
             }
 
+        elif self.args.peft_method == "ba_lora":  # ADD THIS ENTIRE BLOCK
+            # BA-LoRA requires the dataset for gradient analysis
+            # We need to pass it in the config
+            config = {
+                "train_dataset": self.dataset["train"],  # From self.dataset loaded earlier
+                "base_rank": self.args.ba_lora_base_rank,
+                "gradient_samples": self.args.ba_lora_gradient_samples,
+                "use_warmstart": self.args.ba_lora_use_warmstart,
+                "target_modules": self.args.lora_target_modules or None,
+                "lora_alpha": self.args.ba_lora_alpha or (2 * self.args.ba_lora_base_rank),
+                "lora_dropout": self.args.lora_dropout,
+            }
+
         elif self.args.peft_method == "adapter":
-            config = {
-                "method": "adapter",
-                "adapter_name": self.args.adapter_name,
-                "reduction_factor": self.args.adapter_reduction_factor,
-                "adapter_type": self.args.adapter_type,
-                "non_linearity": self.args.adapter_nonlinearity,
-            }
+            # REMOVE THIS ENTIRE BLOCK (adapters no longer supported)
+            raise ValueError("Adapter method no longer supported. Use 'lora' or 'ba_lora'")
 
-        elif self.args.peft_method == "adapter_fusion":
-            if not self.args.adapter_names or not self.args.adapter_paths:
-                raise ValueError(
-                    "AdapterFusion requires --adapter_names and --adapter_paths"
-                )
-            config = {
-                "method": "adapter_fusion",
-                "adapter_names": self.args.adapter_names,
-                "adapter_paths": self.args.adapter_paths,
-                "fusion_type": self.args.fusion_type,
-            }
-
-        elif self.args.peft_method == "hybrid":
-            if not self.args.adapter_names or not self.args.adapter_paths:
-                raise ValueError(
-                    "Hybrid method requires --adapter_names and --adapter_paths"
-                )
-            config = {
-                "adapter_config": {
-                    "method": "adapter_fusion",
-                    "adapter_names": self.args.adapter_names,
-                    "adapter_paths": self.args.adapter_paths,
-                    "fusion_type": self.args.fusion_type,
-                },
-                "lora_config": {
-                    "r": self.args.lora_r,
-                    "lora_alpha": self.args.lora_alpha,
-                    "target_modules": self.args.lora_target_modules or None,
-                    "lora_dropout": self.args.lora_dropout,
-                }
-            }
+        # Remove adapter_fusion and hybrid blocks too
 
         else:
             raise ValueError(f"Unknown PEFT method: {self.args.peft_method}")
@@ -245,10 +218,10 @@ class ImprovedExperimentRunner:
                 "learning_rate": self.args.learning_rate,
                 "seed": self.args.seed,
                 "max_length": self.args.max_length,
-            },
-            "model_info": self.model_info,
-            "eval_results": eval_results,
-        }
+        },
+        "model_info": self.model_info,
+        "eval_results": eval_results,
+    }
 
         # Add PEFT-specific config
         if self.args.peft_method == "lora":
@@ -257,24 +230,23 @@ class ImprovedExperimentRunner:
                 "lora_alpha": self.args.lora_alpha,
                 "lora_dropout": self.args.lora_dropout,
             }
-        elif self.args.peft_method == "adapter":
-            results["config"]["adapter_config"] = {
-                "reduction_factor": self.args.adapter_reduction_factor,
-                "adapter_type": self.args.adapter_type,
-            }
-        elif self.args.peft_method == "hybrid":
-            results["config"]["hybrid_config"] = {
-                "lora_r": self.args.lora_r,
-                "adapter_reduction_factor": self.args.adapter_reduction_factor,
+        elif self.args.peft_method == "ba_lora":
+            results["config"]["ba_lora_config"] = {
+                "base_rank": self.args.ba_lora_base_rank,
+                "gradient_samples": self.args.ba_lora_gradient_samples,
+                "use_warmstart": self.args.ba_lora_use_warmstart,
+                "alpha": self.args.ba_lora_alpha or (2 * self.args.ba_lora_base_rank),
             }
 
         # Add parameter budget info if specified
         if self.args.param_budget:
             results["parameter_budget"] = {
                 "target": self.args.param_budget,
-                "used": self.model_info["added_parameters"],
-                "usage_percentage": self.model_info["budget_usage_percentage"],
-                "within_budget": self.model_info["added_parameters"] <= self.args.param_budget
+                "used": self.model_info.get("peft_parameters",
+                                            self.model_info.get("added_parameters",
+                                                                self.model_info.get("trainable_parameters", 0))),
+                "usage_percentage": self.model_info.get("budget_usage_percentage", 0),
+                "within_budget": self.model_info.get("within_budget", True)
             }
 
         return results
@@ -346,7 +318,7 @@ def parse_arguments():
 
     # PEFT method
     parser.add_argument("--peft_method", type=str, required=True,
-                        choices=["lora", "adapter", "adapter_fusion", "hybrid"],
+                        choices=["lora", "ba_lora"],  # CHANGE: removed adapter options
                         help="PEFT method to use")
 
     # Parameter budget
@@ -365,26 +337,15 @@ def parse_arguments():
     parser.add_argument("--lora_target_modules", nargs="+", default=None,
                         help="Target modules for LoRA")
 
-    # Adapter configuration
-    parser.add_argument("--adapter_name", type=str, default="default_adapter",
-                        help="Name for the adapter")
-    parser.add_argument("--adapter_reduction_factor", type=int, default=16,
-                        help="Adapter bottleneck reduction factor")
-    parser.add_argument("--adapter_type", type=str, default="houlsby",
-                        choices=["houlsby", "pfeiffer"],
-                        help="Adapter architecture type")
-    parser.add_argument("--adapter_nonlinearity", type=str, default="relu",
-                        choices=["relu", "gelu", "swish"],
-                        help="Adapter non-linearity function")
-
-    # AdapterFusion configuration
-    parser.add_argument("--adapter_names", nargs="+", default=None,
-                        help="Names of adapters to fuse")
-    parser.add_argument("--adapter_paths", nargs="+", default=None,
-                        help="Paths to pre-trained adapters")
-    parser.add_argument("--fusion_type", type=str, default="dynamic",
-                        choices=["dynamic", "static"],
-                        help="Fusion mechanism type")
+    # BA-LoRA configuration (ADD THIS ENTIRE SECTION)
+    parser.add_argument("--ba_lora_base_rank", type=int, default=8,
+                        help="BA-LoRA base rank for scaling")
+    parser.add_argument("--ba_lora_gradient_samples", type=int, default=1000,
+                        help="Number of samples for gradient accumulation")
+    parser.add_argument("--ba_lora_use_warmstart", action="store_true",
+                        help="Use warm-start initialization for BA-LoRA")
+    parser.add_argument("--ba_lora_alpha", type=int, default=None,
+                        help="BA-LoRA alpha (default: 2 × base_rank)")
 
     # Training configuration
     parser.add_argument("--epochs", type=int, default=3,
@@ -419,3 +380,38 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# Tl:DR -->
+#
+# --> ### `epoch: 0.43` - Why So Small?
+#
+# **An epoch = one complete pass through ALL training data**
+#
+# SST-2 has **67,349 training examples**. With `batch_size=32`:
+# - **Total batches per epoch** = 67,349 ÷ 32 = **2,105 batches**
+# - **Your current progress**: 0.43 epochs = **~905 batches processed**
+#
+# #### Why Show Fractional Epochs?
+#
+# The Trainer logs progress every `logging_steps=100` batches by default:
+# ```
+# Step 100:  epoch = 100/2105 = 0.05
+# Step 200:  epoch = 200/2105 = 0.10
+# Step 300:  epoch = 300/2105 = 0.14
+# ...
+# Step 905:  epoch = 905/2105 = 0.43  ← You are here!
+# ```
+#
+# This lets you track progress **within** an epoch, not just between epochs.
+#
+# ## What to Expect Next
+#
+# Your training will progress through **3 full epochs**:
+# ```
+# Epoch 0.0 → 1.0:  First complete pass (2,105 batches)
+# Epoch 1.0 → 2.0:  Second pass
+# Epoch 2.0 → 3.0:  Third pass
+#
+# Total: ~6,315 batches (3 epochs × 2,105 batches/epoch)
+# ```
