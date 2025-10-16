@@ -324,7 +324,7 @@ class BALoRABuilder(LoRABuilder):
             param_budget=self.param_budget,
             base_rank=base_rank,
             hidden_dim=self.model.config.hidden_size,
-            num_target_modules=len(target_modules)  # ADD THIS LINE
+            num_target_modules=len(target_modules)
         )
 
         self.rank_allocation = self.rank_allocator.allocate_ranks()
