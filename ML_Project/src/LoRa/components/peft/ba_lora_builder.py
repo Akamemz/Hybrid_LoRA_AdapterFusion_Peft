@@ -106,8 +106,7 @@ class BALoRABuilder(LoRABuilder):
         # Phase 3: Warm-start (optional)
         if use_warmstart:
             print(f"\n[Phase 3/4] Warm-start initialization...")
-            print("  Note: Using standard LoRA initialization")
-            print("  (Custom warm-start is a future enhancement)")
+            self._apply_warmstart(rank_allocation, target_modules)
         else:
             print(f"\n[Phase 3/4] Skipping warm-start (disabled)")
 
@@ -123,7 +122,170 @@ class BALoRABuilder(LoRABuilder):
         # Print final statistics
         self._print_final_stats(peft_model)
 
+        if use_warmstart and hasattr(self, 'warmstart_init'):
+            self._inject_warmstart_weights(peft_model)
+
         return peft_model
+
+
+    def _apply_warmstart(
+            self,
+            rank_allocation: Dict[str, int],
+            target_modules: list
+    ) -> None:
+        """
+        Phase 3: Warm-start initialization using accumulated gradients.
+
+        Initializes LoRA matrices to approximate negative gradient direction:
+        - A: Random initialization (Gaussian)
+        - B: Pseudo-inverse approximation B = -G @ A.T @ (A @ A.T + εI)^(-1)
+
+        This provides better starting point than random initialization.
+
+        Args:
+            rank_allocation: Dictionary mapping layer names to allocated ranks
+            target_modules: List of target module names
+        """
+        if not hasattr(self.gradient_analyzer, 'gradients') or not self.gradient_analyzer.gradients:
+            print("  WARNING: No gradients available for warm-start")
+            print("  Falling back to standard initialization")
+            return
+
+        print("  Applying warm-start initialization...")
+
+        # Regularization parameter for numerical stability
+        eps = 1e-6
+
+        initialized_count = 0
+        skipped_count = 0
+
+        # Iterate through all parameters in the model
+        for name, param in self.model.named_parameters():
+            # Check if this parameter is in our rank allocation
+            if not any(target in name for target in target_modules):
+                continue
+
+            # Find matching gradient
+            matching_grad = None
+            for grad_name, grad_tensor in self.gradient_analyzer.gradients.items():
+                if name in grad_name or grad_name in name:
+                    matching_grad = grad_tensor
+                    break
+
+            if matching_grad is None:
+                skipped_count += 1
+                continue
+
+            # Get allocated rank for this layer
+            layer_rank = None
+            for layer_name, rank in rank_allocation.items():
+                if layer_name in name:
+                    layer_rank = rank
+                    break
+
+            if layer_rank is None:
+                skipped_count += 1
+                continue
+
+            # Get gradient shape [d, k] where d=output_dim, k=input_dim
+            G = matching_grad.to(param.device)
+            d, k = G.shape
+
+            # Ensure rank is valid
+            r = min(layer_rank, min(d, k))
+
+            # Initialize A matrix randomly: A ∈ R^(r, k)
+            # Using small random values (scaled by 0.01 for stability)
+            A = torch.randn(r, k, device=param.device, dtype=param.dtype) * 0.01
+
+            # Initialize B matrix using simplified pseudo-inverse: B ∈ R^(d, r)
+            # Goal: AB ≈ -G (negative gradient direction for descent)
+            # Formula: B = -G @ A.T @ (A @ A.T + εI)^(-1)
+
+            # Compute A @ A.T + εI for regularization
+            AAt = torch.matmul(A, A.T)  # Shape: [r, r]
+            AAt_reg = AAt + torch.eye(r, device=param.device, dtype=param.dtype) * eps
+
+            # Compute inverse (more stable than pseudo-inverse for small matrices)
+            try:
+                AAt_inv = torch.inverse(AAt_reg)  # Shape: [r, r]
+            except RuntimeError:
+                # If inverse fails, use pseudo-inverse as fallback
+                print(f"    WARNING: Standard inverse failed for {name}, using pinv")
+                AAt_inv = torch.pinverse(AAt_reg)
+
+            # Compute B = -G @ A.T @ (A @ A.T + εI)^(-1)
+            # Step 1: G @ A.T → [d, k] @ [k, r] = [d, r]
+            GA = torch.matmul(G, A.T)
+
+            # Step 2: (G @ A.T) @ (A @ A.T + εI)^(-1) → [d, r] @ [r, r] = [d, r]
+            B = -torch.matmul(GA, AAt_inv)
+
+            # Verify shapes
+            assert A.shape == (r, k), f"A shape mismatch: {A.shape} vs ({r}, {k})"
+            assert B.shape == (d, r), f"B shape mismatch: {B.shape} vs ({d}, {r})"
+
+            # Store initialized matrices for later use
+            # These will be injected into the model when LoRA layers are created
+            if not hasattr(self, 'warmstart_init'):
+                self.warmstart_init = {}
+
+            self.warmstart_init[name] = {
+                'A': A.detach().cpu(),
+                'B': B.detach().cpu(),
+                'rank': r
+            }
+
+            initialized_count += 1
+
+            # Optional: Verify approximation quality
+            if initialized_count <= 3:  # Only log first few for brevity
+                AB_approx = torch.matmul(B, A)
+                approx_error = torch.norm(AB_approx + G) / torch.norm(G)
+                print(f"    {name}: rank={r}, approx_error={approx_error:.4f}")
+
+        print(f"  ✓ Warm-start initialization complete")
+        print(f"    Initialized: {initialized_count} layers")
+        print(f"    Skipped: {skipped_count} layers")
+
+        if initialized_count == 0:
+            print("  WARNING: No layers were initialized with warm-start")
+            print("  Model will use standard random initialization")
+
+    def _inject_warmstart_weights(self, peft_model):
+        """
+        Helper method to inject warm-started weights into the PEFT model.
+        Call this after creating the LoRA model but before training.
+
+        Args:
+            peft_model: The PEFT model with LoRA adapters
+        """
+        if not hasattr(self, 'warmstart_init') or not self.warmstart_init:
+            return
+
+        print("\n  Injecting warm-start weights into LoRA adapters...")
+        injected = 0
+
+        for name, param in peft_model.named_parameters():
+            if 'lora' not in name.lower():
+                continue
+
+            # Find matching warm-start initialization
+            for base_name, init_data in self.warmstart_init.items():
+                if base_name in name:
+                    # Determine if this is A or B matrix
+                    if 'lora_A' in name or 'lora_a' in name:
+                        A_init = init_data['A'].to(param.device, dtype=param.dtype)
+                        if param.shape == A_init.shape:
+                            param.data.copy_(A_init)
+                            injected += 1
+                    elif 'lora_B' in name or 'lora_b' in name:
+                        B_init = init_data['B'].to(param.device, dtype=param.dtype)
+                        if param.shape == B_init.shape:
+                            param.data.copy_(B_init)
+                            injected += 1
+
+        print(f"  ✓ Injected warm-start weights into {injected} parameters")
 
     def _estimate_importance(
             self,
