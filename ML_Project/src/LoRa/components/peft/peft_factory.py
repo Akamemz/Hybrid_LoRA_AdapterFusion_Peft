@@ -203,7 +203,7 @@ class PEFTFactory:
 
     @staticmethod
     def calculate_lora_params(hidden_size: int, num_layers: int, r: int,
-                             target_modules: int = 2) -> int:
+                              target_modules: int = 2) -> int:
         """
         Calculate theoretical LoRA parameters.
 
@@ -214,11 +214,23 @@ class PEFTFactory:
             target_modules: Number of modules per layer (default: 2 for q,v)
 
         Returns:
-            Approximate number of trainable parameters
+            Approximate number of trainable PEFT parameters (excluding task head)
         """
-        # Each LoRA module adds 2 * r * hidden_size parameters
-        params_per_layer = target_modules * 2 * r * hidden_size
-        total_params = params_per_layer * num_layers
+        # Each LoRA module has two matrices: A (hidden × rank) and B (rank × hidden)
+        # Total per module: 2 * rank * hidden_size
+        params_per_module = 2 * r * hidden_size
+
+        # Total across all target modules and layers
+        total_params = params_per_module * target_modules * num_layers
+
+        print(f"LoRA parameter calculation:")
+        print(f"  Hidden size: {hidden_size}")
+        print(f"  Rank: {r}")
+        print(f"  Layers: {num_layers}")
+        print(f"  Target modules per layer: {target_modules}")
+        print(f"  Params per module: {params_per_module:,}")
+        print(f"  Total PEFT params: {total_params:,}")
+
         return total_params
 
     def suggest_matching_configs(self, base_r: int = 8,

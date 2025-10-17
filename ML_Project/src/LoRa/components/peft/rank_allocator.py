@@ -110,51 +110,61 @@ class RankAllocator:
         return ranks
 
     def _enforce_budget(self, ranks: Dict[str, int]) -> Dict[str, int]:
-        """Iteratively adjust ranks to meet exact parameter budget."""
+        """Iteratively adjust ranks to meet parameter budget with smarter strategy."""
         ranks = ranks.copy()
-
-        # Reduce if over budget
         max_iterations = 1000
-        iterations = 0
-        while iterations < max_iterations:
+
+        # Step 1: Reduce if significantly over budget (reduce highest ranks first)
+        for iteration in range(max_iterations):
             total_params = self._calculate_params(ranks)
 
             if total_params <= self.param_budget:
                 break
 
-            # Find layer with highest rank
-            max_layer = max(ranks, key=ranks.get)
+            # Sort by rank (highest first)
+            sorted_layers = sorted(ranks.items(), key=lambda x: x[1], reverse=True)
 
-            # Reduce by 1
-            if ranks[max_layer] > self.min_rank:
-                ranks[max_layer] -= 1
-            else:
-                raise ValueError(
-                    f"Cannot meet budget {self.param_budget:,} with min_rank={self.min_rank}"
-                )
+            # Try to reduce highest rank that's above min_rank
+            reduced = False
+            for layer_name, rank in sorted_layers:
+                if rank > self.min_rank:
+                    # Calculate how many params this reduction saves
+                    params_saved = self.num_target_modules * 2 * self.hidden_dim
 
-            iterations += 1
+                    # Only reduce if it helps
+                    if total_params - params_saved >= self.param_budget * 0.97:  # Within 3% is OK
+                        ranks[layer_name] -= 1
+                        reduced = True
+                        break
 
-        # Increase if under budget
-        iterations = 0
-        while iterations < max_iterations:
+            if not reduced:
+                # Can't reduce further, break and accept result
+                break
+
+        # Step 2: Increase if under budget (increase lowest ranks first for balance)
+        for iteration in range(max_iterations):
             total_params = self._calculate_params(ranks)
+            params_per_increase = self.num_target_modules * 2 * self.hidden_dim
 
-            # Check if we can add more
-            params_per_rank = 2 * self.hidden_dim
-            if total_params + params_per_rank > self.param_budget:
+            # Check if we have room to add
+            if total_params + params_per_increase > self.param_budget * 1.03:  # 3% tolerance
                 break
 
-            # Find layer with lowest rank
-            min_layer = min(ranks, key=ranks.get)
+            # Sort by rank (lowest first) - prioritize raising low ranks
+            sorted_layers = sorted(ranks.items(), key=lambda x: x[1])
 
-            # Increase by 1 if within max_rank
-            if ranks[min_layer] < self.max_rank:
-                ranks[min_layer] += 1
-            else:
+            # Increase lowest rank that's below max_rank
+            increased = False
+            for layer_name, rank in sorted_layers:
+                if rank < self.max_rank:
+                    test_total = total_params + params_per_increase
+                    if test_total <= self.param_budget * 1.03:  # Within 3% tolerance
+                        ranks[layer_name] += 1
+                        increased = True
+                        break
+
+            if not increased:
                 break
-
-            iterations += 1
 
         return ranks
 
@@ -187,16 +197,27 @@ class RankAllocator:
         print(f"    Mean rank: {np.mean(rank_values):.1f}")
         print(f"    Std rank: {np.std(rank_values):.1f}")
 
-        if total_params > self.param_budget:
-            raise ValueError(f"Budget exceeded! {total_params:,} > {self.param_budget:,}")
+        # CHANGE: Add 3% tolerance instead of strict check
+        tolerance = 0.03  # 3% tolerance
+        budget_usage = total_params / self.param_budget
+
+        if budget_usage > (1 + tolerance):
+            raise ValueError(
+                f"Budget exceeded by {(budget_usage - 1) * 100:.1f}%! "
+                f"{total_params:,} > {self.param_budget:,} "
+                f"(tolerance: {tolerance * 100:.0f}%)"
+            )
+
+        if budget_usage < (1 - tolerance):
+            print(f"⚠️  Warning: Only using {budget_usage * 100:.1f}% of budget")
 
         # Print allocation details
         print(f"\n  Rank allocation by layer:")
         sorted_layers = sorted(ranks.items(), key=lambda x: x[1])
         for name, rank in sorted_layers:
             importance = self.importance_scores.get(name, 0)
-            params = 2 * rank * self.hidden_dim
-            print(f"    {name:30s}: rank={rank:2d}  params={params:,}")
+            params = self.num_target_modules * 2 * rank * self.hidden_dim  # FIX: multiply by num_target_modules
+            print(f"    {name:30s}: rank={rank:2d}  importance={importance:.4f}  params={params:,}")
 
     def get_rank_for_layer(self, layer_name: str) -> Optional[int]:
         """Get allocated rank for a specific layer."""

@@ -100,7 +100,7 @@ class BALoRABuilder(LoRABuilder):
         # Phase 2: Allocate ranks
         print(f"\n[Phase 2/4] Allocating ranks with budget constraint...")
         rank_allocation = self._allocate_ranks(
-            importance_scores, base_rank, target_modules  # ADD target_modules parameter
+            importance_scores, base_rank, target_modules
         )
 
         # Phase 3: Warm-start (optional)
@@ -313,7 +313,7 @@ class BALoRABuilder(LoRABuilder):
             self,
             importance_scores: Dict[str, float],
             base_rank: int,
-            target_modules: list  # ADD THIS PARAMETER
+            target_modules: list
     ) -> Dict[str, int]:
         """Phase 2: Allocate ranks based on importance and budget."""
         if not self.param_budget:
