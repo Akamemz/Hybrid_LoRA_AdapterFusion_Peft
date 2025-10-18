@@ -119,7 +119,7 @@ class GradientAnalyzer:
 
         # Store accumulated gradients for target modules
         for name, param in self.model.named_parameters():
-            if any(target in name for target in self.target_modules):
+            if any(target in name for target in self.target_modules) and not name.endswith('.bias'):
                 if param.grad is not None:
                     self.gradients[name] = param.grad.clone().detach().cpu()
 

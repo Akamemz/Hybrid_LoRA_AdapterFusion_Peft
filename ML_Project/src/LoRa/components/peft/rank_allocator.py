@@ -14,8 +14,8 @@ class RankAllocator:
             base_rank: int = 8,
             hidden_dim: int = 768,
             min_rank: int = 2,
-            max_rank: int = 32,
-            num_target_modules: int = 2  # ADD THIS PARAMETER
+            max_rank: int = 62,
+            num_target_modules: int = 2
     ):
         """
         Initialize rank allocator.
@@ -74,7 +74,6 @@ class RankAllocator:
         return final_ranks
 
     def _normalize_importance(self) -> Dict[str, float]:
-        """Normalize importance scores to [0.5, 2.0] range."""
         scores = list(self.importance_scores.values())
         max_score = max(scores)
         min_score = min(scores)
@@ -83,11 +82,14 @@ class RankAllocator:
             return {name: 1.0 for name in self.importance_scores.keys()}
 
         normalized = {}
+        eps = 1e-8
         for name, score in self.importance_scores.items():
-            # Map to [0, 1]
+            # Map to [0,1]
             norm = (score - min_score) / (max_score - min_score)
-            # Map to [0.5, 2.0]
-            normalized[name] = 0.5 + 1.5 * norm
+            # Optional: Log-amplify to exaggerate differences (uncomment if variation still low)
+            norm = np.log1p(norm * 10) / np.log1p(10)  # Soft log scaling
+            # Map to wider [0.25,4.0] for more rank spread
+            normalized[name] = 0.25 + 3.75 * norm
 
         return normalized
 
@@ -198,7 +200,7 @@ class RankAllocator:
         print(f"    Std rank: {np.std(rank_values):.1f}")
 
         # CHANGE: Add 3% tolerance instead of strict check
-        tolerance = 0.03  # 3% tolerance
+        tolerance = 0.05  # 5% tolerance
         budget_usage = total_params / self.param_budget
 
         if budget_usage > (1 + tolerance):
@@ -211,13 +213,16 @@ class RankAllocator:
         if budget_usage < (1 - tolerance):
             print(f"⚠️  Warning: Only using {budget_usage * 100:.1f}% of budget")
 
+        if np.std(rank_values) < 1.0:
+            print("⚠️  Warning: Low rank variation (std <1.0) - consider more samples or log-scaling in normalization")
+
         # Print allocation details
         print(f"\n  Rank allocation by layer:")
         sorted_layers = sorted(ranks.items(), key=lambda x: x[1])
         for name, rank in sorted_layers:
             importance = self.importance_scores.get(name, 0)
             params = self.num_target_modules * 2 * rank * self.hidden_dim  # FIX: multiply by num_target_modules
-            print(f"    {name:30s}: rank={rank:2d}  importance={importance:.4f}  params={params:,}")
+            print(f"    {name:30s}: rank={rank:2d}  importance={importance:.6f}  params={params:,}")
 
     def get_rank_for_layer(self, layer_name: str) -> Optional[int]:
         """Get allocated rank for a specific layer."""
