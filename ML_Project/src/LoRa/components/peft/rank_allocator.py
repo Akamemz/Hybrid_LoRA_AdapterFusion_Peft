@@ -85,11 +85,11 @@ class RankAllocator:
         eps = 1e-8
         for name, score in self.importance_scores.items():
             # Map to [0,1]
-            norm = (score - min_score) / (max_score - min_score)
+            norm = (score - min_score) / (max_score - min_score + eps)
             # Optional: Log-amplify to exaggerate differences (uncomment if variation still low)
-            norm = np.log1p(norm * 10) / np.log1p(10)  # Soft log scaling
-            # Map to wider [0.25,4.0] for more rank spread
-            normalized[name] = 0.25 + 3.75 * norm
+            norm = np.log1p(norm * 20) / np.log1p(20)  # Soft log scaling
+            # Map to wider [0.1, ~8.0] for more rank spread
+            normalized[name] = 0.1 + 7.9 * norm
 
         return normalized
 
@@ -112,61 +112,55 @@ class RankAllocator:
         return ranks
 
     def _enforce_budget(self, ranks: Dict[str, int]) -> Dict[str, int]:
-        """Iteratively adjust ranks to meet parameter budget with smarter strategy."""
+        """Iteratively adjust ranks to meet parameter budget exactly (strict <= budget)."""
         ranks = ranks.copy()
         max_iterations = 1000
+        params_per_change = self.num_target_modules * 2 * self.hidden_dim  # Params added/subtracted per rank change
 
-        # Step 1: Reduce if significantly over budget (reduce highest ranks first)
-        for iteration in range(max_iterations):
+        # Step 1: Reduce if over (highest ranks first)
+        iteration = 0
+        while iteration < max_iterations:
             total_params = self._calculate_params(ranks)
-
             if total_params <= self.param_budget:
                 break
 
-            # Sort by rank (highest first)
+            # Sort by rank descending
             sorted_layers = sorted(ranks.items(), key=lambda x: x[1], reverse=True)
-
-            # Try to reduce highest rank that's above min_rank
             reduced = False
             for layer_name, rank in sorted_layers:
                 if rank > self.min_rank:
-                    # Calculate how many params this reduction saves
-                    params_saved = self.num_target_modules * 2 * self.hidden_dim
-
-                    # Only reduce if it helps
-                    if total_params - params_saved >= self.param_budget * 0.97:  # Within 3% is OK
-                        ranks[layer_name] -= 1
-                        reduced = True
-                        break
-
+                    ranks[layer_name] -= 1
+                    reduced = True
+                    break
             if not reduced:
-                # Can't reduce further, break and accept result
-                break
+                break  # Can't reduce more
+            iteration += 1
 
-        # Step 2: Increase if under budget (increase lowest ranks first for balance)
-        for iteration in range(max_iterations):
+        # Step 2: Increase if under (lowest ranks first, only if room)
+        iteration = 0
+        while iteration < max_iterations:
             total_params = self._calculate_params(ranks)
-            params_per_increase = self.num_target_modules * 2 * self.hidden_dim
+            if total_params + params_per_change > self.param_budget:
+                break  # No room to add
 
-            # Check if we have room to add
-            if total_params + params_per_increase > self.param_budget * 1.03:  # 3% tolerance
-                break
-
-            # Sort by rank (lowest first) - prioritize raising low ranks
+            # Sort by rank ascending
             sorted_layers = sorted(ranks.items(), key=lambda x: x[1])
-
-            # Increase lowest rank that's below max_rank
             increased = False
             for layer_name, rank in sorted_layers:
                 if rank < self.max_rank:
-                    test_total = total_params + params_per_increase
-                    if test_total <= self.param_budget * 1.03:  # Within 3% tolerance
+                    test_total = total_params + params_per_change
+                    if test_total <= self.param_budget:
                         ranks[layer_name] += 1
                         increased = True
                         break
-
             if not increased:
                 break
+            iteration += 1
+
+        # Final check (should now be <= budget)
+        final_params = self._calculate_params(ranks)
+        if final_params > self.param_budget:
+            raise ValueError(f"Could not meet budget after adjustments: {final_params:,} > {self.param_budget:,}")
 
         return ranks
 

@@ -1,10 +1,11 @@
 """
 LoRA Builder - Pure LoRA implementation using PEFT library
+FIXED: All type hint issues resolved
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 from transformers import PreTrainedModel
-from peft import get_peft_model, LoraConfig, TaskType
+from peft import get_peft_model, LoraConfig, TaskType, PeftModel, PeftMixedModel
 from .base import BasePeftBuilder
 
 
@@ -29,8 +30,16 @@ class LoRABuilder(BasePeftBuilder):
         print(f"Model type: {self.model_type}")
 
     @staticmethod
-    def count_parameters(model: PreTrainedModel) -> tuple[int, int]:
-        """Count total and trainable parameters."""
+    def count_parameters(model: Union[PreTrainedModel, PeftModel, PeftMixedModel]) -> tuple[int, int]:
+        """
+        Count total and trainable parameters.
+
+        Args:
+            model: Model to count parameters for (can be PeftModel or PreTrainedModel)
+
+        Returns:
+            Tuple of (total_parameters, trainable_parameters)
+        """
         total = sum(p.numel() for p in model.parameters())
         trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         return total, trainable
@@ -67,7 +76,7 @@ class LoRABuilder(BasePeftBuilder):
             print(f"Warning: Unknown model type '{self.model_type}', using default targets")
             return ["query", "value", "q_proj", "v_proj"]
 
-    def build(self, config: Dict) -> PreTrainedModel:
+    def build(self, config: Dict) -> Union[PreTrainedModel, PeftModel, PeftMixedModel]:
         """
         Apply LoRA configuration to the model.
 
@@ -82,7 +91,7 @@ class LoRABuilder(BasePeftBuilder):
         Returns:
             Model with LoRA applied
         """
-        # Extract configuration parameters
+        # Extract configuration parameters (no type hints to avoid conflicts)
         r = config.get("r", 8)
         lora_alpha = config.get("lora_alpha", 16)
         target_modules = config.get("target_modules") or self._get_default_target_modules()
@@ -144,7 +153,7 @@ class LoRABuilder(BasePeftBuilder):
 
         return peft_model
 
-    def _print_trainable_modules(self, model: PreTrainedModel):
+    def _print_trainable_modules(self, model: Union[PreTrainedModel, PeftModel, PeftMixedModel]):
         """Print first few trainable module names."""
         trainable_modules = [
             name for name, param in model.named_parameters()
@@ -158,9 +167,12 @@ class LoRABuilder(BasePeftBuilder):
         if len(trainable_modules) > 5:
             print(f"  ... and {len(trainable_modules) - 5} more")
 
-    def get_lora_info(self, model: PreTrainedModel) -> Dict:
+    def get_lora_info(self, model: Union[PreTrainedModel, PeftModel, PeftMixedModel]) -> Dict:
         """
         Get detailed information about LoRA configuration.
+
+        Args:
+            model: PEFT model to analyze
 
         Returns:
             Dictionary with LoRA statistics and configuration
@@ -170,17 +182,30 @@ class LoRABuilder(BasePeftBuilder):
         if not isinstance(model, PeftModel):
             return {"error": "Model is not a PEFT model"}
 
-        config = model.peft_config
+        # Get the peft config
+        peft_config = model.peft_config
+
+        # Access the default adapter config safely
+        # peft_config is typically a dict with adapter names as keys
+        if isinstance(peft_config, dict):
+            default_config = peft_config.get("default")
+        else:
+            default_config = peft_config
+
+        # Extract config values safely using getattr
+        lora_r = getattr(default_config, 'r', 'N/A') if default_config else 'N/A'
+        lora_alpha = getattr(default_config, 'lora_alpha', 'N/A') if default_config else 'N/A'
+        target_modules = getattr(default_config, 'target_modules', 'N/A') if default_config else 'N/A'
+
+        # Count parameters
         total, trainable = self.count_parameters(model)
 
         return {
             "peft_type": "LoRA",
             "lora_config": {
-                "r": config.get("default", {}).r if hasattr(config.get("default", {}), 'r') else "N/A",
-                "lora_alpha": config.get("default", {}).lora_alpha if hasattr(config.get("default", {}),
-                                                                              'lora_alpha') else "N/A",
-                "target_modules": config.get("default", {}).target_modules if hasattr(config.get("default", {}),
-                                                                                      'target_modules') else "N/A",
+                "r": lora_r,
+                "lora_alpha": lora_alpha,
+                "target_modules": target_modules,
             },
             "total_parameters": total,
             "trainable_parameters": trainable,

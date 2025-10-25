@@ -4,7 +4,7 @@ ML_Project/src/LoRa/components/peft/ba_lora_builder.py
 BA-LoRA Builder: Orchestrates all phases of Budget-Aware Adaptive LoRA
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 import torch
 import numpy as np
 from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -27,6 +27,7 @@ class BALoRABuilder(LoRABuilder):
             self,
             model: PreTrainedModel,
             tokenizer: PreTrainedTokenizer,
+            min_rank=2,
             param_budget: Optional[int] = None
     ):
         """
@@ -40,7 +41,7 @@ class BALoRABuilder(LoRABuilder):
         super().__init__(model)
         self.tokenizer = tokenizer
         self.param_budget = param_budget
-
+        self.min_rank = min_rank
         self.gradient_analyzer = None
         self.rank_allocator = None
         self.rank_allocation = {}
@@ -49,14 +50,14 @@ class BALoRABuilder(LoRABuilder):
         if param_budget:
             print(f"  Parameter budget: {param_budget:,}")
 
-    def build(self, config: Dict) -> PeftModel:
+    def build(self, config: Dict) -> Union[PreTrainedModel, PeftModel, PeftMixedModel]:
         """Build BA-LoRA model (main method - calls fixed warm-start)."""
         print(f"\n{'=' * 70}")
         print("BUILDING BA-LORA MODEL (FIXED WARM-START)")
         print(f"{'=' * 70}")
 
         # Freeze classifier head
-        freeze_head = config.get("freeze_head", True)
+        freeze_head = config.get("freeze_head", False)
         if freeze_head:
             print("\nFreezing classifier head parameters...")
             frozen_params = 0
@@ -94,7 +95,7 @@ class BALoRABuilder(LoRABuilder):
         print(f"\n[Phase 2/4] Allocating ranks with budget constraint...")
         rank_allocation = self._allocate_ranks(
             importance_scores, base_rank, target_modules,
-            min_rank=config.get("min_rank", 2),
+            min_rank=config.get("min_rank", 5),
             max_rank=config.get("max_rank", 64)
         )
 
@@ -310,17 +311,37 @@ class BALoRABuilder(LoRABuilder):
                 # Use truncated SVD of gradient to initialize A
                 # This ensures A captures the principal directions of G
                 try:
-                    # Compute SVD: G = U @ S @ V^T
-                    U, S, Vt = torch.svd(G)
+                    # Normalize G for consistent magnitude
+                    G_norm = G / (G.norm() + 1e-8)
 
-                    # Use top-r right singular vectors as initialization for A
-                    # This captures the most important input directions
-                    A = Vt[:r, :].clone()  # Shape: [r, k]
+                    # SVD on normalized G
+                    U, S, Vt = torch.svd(G_norm)
 
-                    # Scale by square root of singular values for better conditioning
-                    # This helps with numerical stability
-                    scale = torch.sqrt(S[:r].mean())
-                    A = A * scale
+                    # Higher scale for small grads
+                    scale = torch.sqrt(S[:r].mean() * 2)  # Empirical boost
+                    A = Vt[:r, :].clone() * scale
+
+                    # Adaptive eps on normalized mean
+                    grad_mean = G_norm.abs().mean()
+                    eps_adaptive = max(1e-6, grad_mean.item() * 0.01)
+
+                    AAt = torch.matmul(A, A.T) + torch.eye(r, device=A.device) * eps_adaptive
+
+                    # Stable inverse with fallback
+                    try:
+                        L = torch.linalg.cholesky(AAt)
+                        AAt_inv = torch.cholesky_inverse(L)
+                    except RuntimeError:
+                        print(f"    Cholesky failed for {grad_name}, using pinverse")
+                        AAt_inv = torch.pinverse(AAt)
+
+                    GA = torch.matmul(G_norm, A.T)  # Use G_norm
+                    B = -torch.matmul(GA, AAt_inv)
+
+                    # Quality metrics on original G scale (for reporting)
+                    AB = torch.matmul(B, A) * G.norm()  # Rescale back
+                    rel_error = torch.norm(AB + G) / torch.norm(G)
+                    explained_var = (1 - rel_error ** 2).item()  # R^2 approx
 
                     print(f"    {layer_name} <- {grad_name}: Using SVD initialization")
 
@@ -549,7 +570,7 @@ class BALoRABuilder(LoRABuilder):
 
         self.rank_allocator = RankAllocator(
             importance_scores=importance_scores,
-            param_budget=self.param_budget,
+            param_budget=self.param_budget ,
             base_rank=base_rank,
             hidden_dim=self.model.config.hidden_size,
             min_rank=min_rank,  # Pass through
@@ -568,7 +589,7 @@ class BALoRABuilder(LoRABuilder):
             lora_alpha: int,
             lora_dropout: float,
             target_modules: list
-    ) -> PeftModel:
+    ) -> Union[PreTrainedModel, PeftModel, PeftMixedModel]:
 
         if isinstance(self.model, (PeftModel, PeftMixedModel)):
             raise ValueError("Model is already a PEFT model. Cannot apply LoRA again.")
