@@ -95,7 +95,7 @@ class BALoRABuilder(LoRABuilder):
         print(f"\n[Phase 2/4] Allocating ranks with budget constraint...")
         rank_allocation = self._allocate_ranks(
             importance_scores, base_rank, target_modules,
-            min_rank=config.get("min_rank", 5),
+            min_rank=config.get("min_rank", 2),
             max_rank=config.get("max_rank", 64)
         )
 
