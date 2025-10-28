@@ -1,0 +1,34 @@
+# Core ML libraries
+torch>=2.0.0
+transformers>=4.30.0
+datasets>=2.14.0
+
+# PEFT and related tooling
+peft>=0.4.0
+accelerate>=0.20.3
+safetensors>=0.3.0
+
+# Optional / for QLoRA / 8-bit training (recommended if using 4/8-bit fine-tuning)
+bitsandbytes>=0.39.0  # optional: requires CUDA and special install
+
+# Tokenization and sentence models
+sentencepiece>=0.1.99
+tokenizers==0.13.3  # pin to a known prebuilt wheel to avoid building from source
+
+# Data + utils
+numpy>=1.24.0
+pandas>=2.0.0
+pyyaml>=6.0
+scikit-learn>=1.2.0
+tqdm>=4.64.0
+
+# Evaluation and testing
+evaluate>=0.4.0
+pytest>=7.0.0
+
+# Misc (file IO, backends)
+fsspec>=2023.11.0
+
+# Notes:
+# - If you plan to use CPU-only, install the CPU build of torch appropriate for your platform.
+# - bitsandbytes is optional but often required for QLoRA/4-bit training; follow its platform-specific install instructions.
