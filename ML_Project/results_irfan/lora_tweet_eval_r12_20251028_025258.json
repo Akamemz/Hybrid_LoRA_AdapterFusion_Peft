@@ -1,0 +1,41 @@
+{
+  "experiment_name": "lora_tweet_eval_r12",
+  "timestamp": "2025-10-28T02:49:02.905760",
+  "duration_seconds": 235.934528,
+  "config": {
+    "model": "distilbert-base-uncased",
+    "dataset": "tweet_eval",
+    "peft_method": "lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 128,
+    "lora_config": {
+      "r": 12,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1
+    }
+  },
+  "model_info": {
+    "total_parameters": 67769862,
+    "trainable_parameters": 814083,
+    "frozen_parameters": 66955779,
+    "peft_parameters": 221184,
+    "added_parameters": 221184,
+    "task_head_parameters": 592899,
+    "trainable_percentage": 1.2012463593330027,
+    "parameter_efficiency": 98.79875364066699
+  },
+  "eval_results": {
+    "eval_loss": 0.6782536506652832,
+    "eval_accuracy": 0.698,
+    "eval_f1": 0.6995,
+    "eval_precision": 0.7022,
+    "eval_recall": 0.698,
+    "eval_runtime": 3.1169,
+    "eval_samples_per_second": 641.668,
+    "eval_steps_per_second": 5.133,
+    "epoch": 3.0
+  }
+}
