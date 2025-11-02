@@ -1,0 +1,41 @@
+{
+  "experiment_name": "roberta_lora_tweet_eval_r6",
+  "timestamp": "2025-10-28T17:04:31.143602",
+  "duration_seconds": 431.37068,
+  "config": {
+    "model": "roberta-base",
+    "dataset": "tweet_eval",
+    "peft_method": "lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 128,
+    "lora_config": {
+      "r": 6,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1
+    }
+  },
+  "model_info": {
+    "total_parameters": 125462022,
+    "trainable_parameters": 814083,
+    "frozen_parameters": 124647939,
+    "peft_parameters": 221184,
+    "added_parameters": 221184,
+    "task_head_parameters": 592899,
+    "trainable_percentage": 0.6488680694146631,
+    "parameter_efficiency": 99.35113193058534
+  },
+  "eval_results": {
+    "eval_loss": 0.6370757818222046,
+    "eval_accuracy": 0.7215,
+    "eval_f1": 0.7219,
+    "eval_precision": 0.723,
+    "eval_recall": 0.7215,
+    "eval_runtime": 5.3767,
+    "eval_samples_per_second": 371.978,
+    "eval_steps_per_second": 2.976,
+    "epoch": 3.0
+  }
+}
