@@ -1,0 +1,219 @@
+# ML_Project/configs/sst2_test_configs.yaml
+#
+# Simplified configuration for testing with SST-2 only
+# Use this to verify your implementation before running full experiments
+
+# Global settings
+global:
+  model_name: "distilbert-base-uncased"
+  dataset: "sst2"
+  seed: 42
+  max_length: 128
+  learning_rate: 5e-5
+  warmup_steps: 100
+  weight_decay: 0.01
+  metric_for_best_model: "f1"
+
+# ====================================================================================
+# QUICK TEST: Verify all methods work (minimal resources)
+# ====================================================================================
+quick_test:
+  description: "Quick test with 16 examples per class, 1 epoch"
+
+  base_config:
+    epochs: 1
+    batch_size: 16
+    few_shot_n: 16
+    logging_steps: 10
+    param_budget: 75000
+
+  experiments:
+    - name: "quick_test_lora"
+      peft_method: "lora"
+      lora_r: 4
+      lora_alpha: 8
+      lora_dropout: 0.1
+
+    - name: "quick_test_adapter"
+      peft_method: "adapter"
+      adapter_name: "test_adapter"
+      adapter_reduction_factor: 16
+      adapter_type: "houlsby"
+
+# ====================================================================================
+# SINGLE TASK: Full SST-2 with matched parameters
+# ====================================================================================
+single_task_sst2:
+  description: "Compare PEFT methods on full SST-2 dataset"
+
+  base_config:
+    epochs: 3
+    batch_size: 16
+    logging_steps: 100
+    param_budget: 75000
+
+  experiments:
+    - name: "sst2_lora_r8"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      lora_dropout: 0.1
+
+    - name: "sst2_lora_r4"
+      peft_method: "lora"
+      lora_r: 4
+      lora_alpha: 8
+      lora_dropout: 0.1
+
+    - name: "sst2_adapter_rf16"
+      peft_method: "adapter"
+      adapter_name: "sst2_adapter"
+      adapter_reduction_factor: 16
+      adapter_type: "houlsby"
+      adapter_nonlinearity: "relu"
+
+    - name: "sst2_adapter_rf8"
+      peft_method: "adapter"
+      adapter_name: "sst2_adapter"
+      adapter_reduction_factor: 8
+      adapter_type: "houlsby"
+
+# ====================================================================================
+# FEW-SHOT: Test low-resource learning
+# ====================================================================================
+few_shot_sst2:
+  description: "Few-shot learning on SST-2 with varying training sizes"
+
+  base_config:
+    epochs: 5
+    batch_size: 8
+    logging_steps: 50
+    param_budget: 75000
+
+  # Different shot counts
+  shot_16:
+    - name: "sst2_16shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      few_shot_n: 16
+
+    - name: "sst2_16shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      few_shot_n: 16
+
+  shot_32:
+    - name: "sst2_32shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      few_shot_n: 32
+
+    - name: "sst2_32shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      few_shot_n: 32
+
+  shot_64:
+    - name: "sst2_64shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      few_shot_n: 64
+
+    - name: "sst2_64shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      few_shot_n: 64
+
+  # Combine all for batch running
+  experiments:
+    - name: "sst2_16shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      few_shot_n: 16
+
+    - name: "sst2_16shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      few_shot_n: 16
+
+    - name: "sst2_32shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      few_shot_n: 32
+
+    - name: "sst2_32shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      few_shot_n: 32
+
+# ====================================================================================
+# PARAMETER SWEEP: Study parameter efficiency
+# ====================================================================================
+parameter_sweep:
+  description: "Vary parameter budgets to study efficiency-performance tradeoff"
+
+  base_config:
+    epochs: 3
+    batch_size: 16
+    logging_steps: 100
+
+  experiments:
+    # Very small budget (~25k)
+    - name: "sst2_budget25k_lora"
+      peft_method: "lora"
+      lora_r: 4
+      lora_alpha: 8
+      param_budget: 25000
+
+    - name: "sst2_budget25k_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 32
+      param_budget: 25000
+
+    # Medium budget (~75k)
+    - name: "sst2_budget75k_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      param_budget: 75000
+
+    - name: "sst2_budget75k_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      param_budget: 75000
+
+    # Large budget (~150k)
+    - name: "sst2_budget150k_lora"
+      peft_method: "lora"
+      lora_r: 16
+      lora_alpha: 32
+      param_budget: 150000
+
+    - name: "sst2_budget150k_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 8
+      param_budget: 150000
+
+# ====================================================================================
+# DEBUGGING: Minimal config for testing code changes
+# ====================================================================================
+debug:
+  description: "Minimal configuration for debugging - very fast"
+
+  base_config:
+    epochs: 1
+    batch_size: 32
+    few_shot_n: 8
+    logging_steps: 5
+    max_length: 64  # Shorter sequences
+
+  experiments:
+    - name: "debug_lora"
+      peft_method: "lora"
+      lora_r: 2
+      lora_alpha: 4

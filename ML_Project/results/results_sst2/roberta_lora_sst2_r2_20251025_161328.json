@@ -1,0 +1,41 @@
+{
+  "experiment_name": "roberta_lora_sst2_r2",
+  "timestamp": "2025-10-25T15:04:19.979717",
+  "duration_seconds": 4148.332624,
+  "config": {
+    "model": "roberta-base",
+    "dataset": "sst2",
+    "peft_method": "lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 128,
+    "lora_config": {
+      "r": 2,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1
+    }
+  },
+  "model_info": {
+    "total_parameters": 125313028,
+    "trainable_parameters": 665858,
+    "frozen_parameters": 124647170,
+    "peft_parameters": 73728,
+    "added_parameters": 73728,
+    "task_head_parameters": 592130,
+    "trainable_percentage": 0.531355766137899,
+    "parameter_efficiency": 99.46864423386211
+  },
+  "eval_results": {
+    "eval_loss": 0.21579833328723907,
+    "eval_accuracy": 0.9358,
+    "eval_f1": 0.9374,
+    "eval_precision": 0.9311,
+    "eval_recall": 0.9437,
+    "eval_runtime": 8.2347,
+    "eval_samples_per_second": 105.893,
+    "eval_steps_per_second": 6.679,
+    "epoch": 3.0
+  }
+}

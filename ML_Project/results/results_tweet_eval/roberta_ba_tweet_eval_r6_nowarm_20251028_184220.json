@@ -1,0 +1,51 @@
+{
+  "experiment_name": "roberta_ba_tweet_eval_r6_nowarm",
+  "timestamp": "2025-10-28T18:35:59.718127",
+  "duration_seconds": 380.885635,
+  "config": {
+    "model": "roberta-base",
+    "dataset": "tweet_eval",
+    "peft_method": "ba_lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 128,
+    "ba_lora_config": {
+      "base_rank": 6,
+      "gradient_samples": 5000,
+      "use_warmstart": false,
+      "alpha": 12
+    }
+  },
+  "model_info": {
+    "total_parameters": 125462022,
+    "trainable_parameters": 814083,
+    "frozen_parameters": 124647939,
+    "peft_parameters": 221184,
+    "added_parameters": 221184,
+    "task_head_parameters": 592899,
+    "trainable_percentage": 0.6488680694146631,
+    "parameter_efficiency": 99.35113193058534,
+    "budget_usage_percentage": 100.0,
+    "budget_remaining": 0,
+    "within_budget": true
+  },
+  "eval_results": {
+    "eval_loss": 0.6308287978172302,
+    "eval_accuracy": 0.722,
+    "eval_f1": 0.7229,
+    "eval_precision": 0.7253,
+    "eval_recall": 0.722,
+    "eval_runtime": 4.3,
+    "eval_samples_per_second": 465.116,
+    "eval_steps_per_second": 3.721,
+    "epoch": 3.0
+  },
+  "parameter_budget": {
+    "target": 221184,
+    "used": 221184,
+    "usage_percentage": 100.0,
+    "within_budget": true
+  }
+}

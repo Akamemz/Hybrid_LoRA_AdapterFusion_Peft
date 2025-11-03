@@ -1,0 +1,14 @@
+{
+  "dataset": "ag_news",
+  "splits": [
+    "train",
+    "test"
+  ],
+  "outdir": "data/ag_news_dataset",
+  "files": [
+    "data/ag_news_dataset/ag_news_train.csv",
+    "data/ag_news_dataset/ag_news_test.csv"
+  ],
+  "num_samples": -1,
+  "with_label_text": true
+}

@@ -1,0 +1,291 @@
+# ML_Project/configs/experiment_configs.yaml
+#
+# Comprehensive experiment configurations for PEFT research
+# All experiments use matched parameter budgets for fair comparison
+
+# Global settings
+global:
+  model_name: "distilbert-base-uncased"
+  seed: 42
+  epochs: 3
+  batch_size: 16
+  learning_rate: 5e-5
+  fp16: true
+
+  # Parameter budget (calculated for DistilBERT-base with hidden_size=768, 6 layers)
+  # LoRA r=8, 2 modules: ~75k parameters
+  # We'll use this as the baseline budget
+  param_budget: 75000
+
+# ====================================================================================
+# EXPERIMENT SET 1: Single-Task Performance with Matched Parameters
+# Goal: Compare methods on full datasets with same parameter budget
+# ====================================================================================
+experiment_set_1_single_task:
+  description: "Compare PEFT methods on full SST-2, AG News, and IMDB"
+
+  base_config:
+    epochs: 3
+    batch_size: 16
+    param_budget: 75000
+
+  experiments:
+    # SST-2 experiments
+    - name: "E1_sst2_lora_r8"
+      dataset: "sst2"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+      lora_dropout: 0.1
+
+    - name: "E1_sst2_adapter_rf16"
+      dataset: "sst2"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      adapter_type: "houlsby"
+
+    - name: "E1_sst2_hybrid"
+      dataset: "sst2"
+      peft_method: "hybrid"
+      lora_r: 4  # Half LoRA rank to stay within budget
+      adapter_reduction_factor: 32  # Higher reduction for adapters
+      adapter_names: []  # Placeholder - needs pre-trained adapters
+      adapter_paths: []
+
+    # AG News experiments
+    - name: "E1_agnews_lora_r8"
+      dataset: "ag_news"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+
+    - name: "E1_agnews_adapter_rf16"
+      dataset: "ag_news"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+
+    - name: "E1_agnews_hybrid"
+      dataset: "ag_news"
+      peft_method: "hybrid"
+      lora_r: 4
+      adapter_reduction_factor: 32
+
+    # IMDB experiments
+    - name: "E1_imdb_lora_r8"
+      dataset: "imdb"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+
+    - name: "E1_imdb_adapter_rf16"
+      dataset: "imdb"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+
+    - name: "E1_imdb_hybrid"
+      dataset: "imdb"
+      peft_method: "hybrid"
+      lora_r: 4
+      adapter_reduction_factor: 32
+
+# ====================================================================================
+# EXPERIMENT SET 2: Few-Shot Learning
+# Goal: Test methods in low-resource scenarios
+# ====================================================================================
+experiment_set_2_few_shot:
+  description: "Few-shot learning on SST-2 with varying training sizes"
+
+  base_config:
+    dataset: "sst2"
+    epochs: 5  # More epochs for few-shot
+    batch_size: 8  # Smaller batch for few samples
+    param_budget: 75000
+
+  shot_counts: [8, 16, 32, 64, 128]
+
+  experiments:
+    - name: "E2_sst2_fewshot_{n}shot_lora"
+      peft_method: "lora"
+      lora_r: 8
+      lora_alpha: 16
+
+    - name: "E2_sst2_fewshot_{n}shot_adapter"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+
+    - name: "E2_sst2_fewshot_{n}shot_hybrid"
+      peft_method: "hybrid"
+      lora_r: 4
+      adapter_reduction_factor: 32
+
+# ====================================================================================
+# EXPERIMENT SET 3: Transfer Learning with AdapterFusion
+# Goal: Demonstrate cross-domain knowledge transfer
+# ====================================================================================
+experiment_set_3_transfer:
+  description: "Transfer learning using pre-trained adapters"
+
+  # Phase 1: Train source adapters
+  source_training:
+    - name: "E3_source_agnews_adapter"
+      dataset: "ag_news"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      adapter_name: "agnews_adapter"
+
+    - name: "E3_source_imdb_adapter"
+      dataset: "imdb"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      adapter_name: "imdb_adapter"
+
+  # Phase 2: Target task with fusion
+  target_experiments:
+    base_config:
+      dataset: "sst2"
+      epochs: 3
+      param_budget: 75000
+
+    experiments:
+      - name: "E3_sst2_fusion_agnews_imdb"
+        peft_method: "adapter_fusion"
+        adapter_names: ["agnews_adapter", "imdb_adapter"]
+        adapter_paths: ["results/E3_source_agnews_adapter", "results/E3_source_imdb_adapter"]
+        fusion_type: "dynamic"
+
+      - name: "E3_sst2_hybrid_agnews_imdb"
+        peft_method: "hybrid"
+        lora_r: 4
+        adapter_names: ["agnews_adapter", "imdb_adapter"]
+        adapter_paths: ["results/E3_source_agnews_adapter", "results/E3_source_imdb_adapter"]
+        fusion_type: "dynamic"
+
+# ====================================================================================
+# EXPERIMENT SET 4: Parameter Efficiency Analysis
+# Goal: Study parameter count vs performance tradeoff
+# ====================================================================================
+experiment_set_4_efficiency:
+  description: "Vary parameter budgets to study efficiency-performance tradeoff"
+
+  base_config:
+    dataset: "sst2"
+    epochs: 3
+    batch_size: 16
+
+  # Different budget levels
+  budgets:
+    - budget: 25000  # ~25k parameters
+      lora_r: 4
+      adapter_rf: 24
+
+    - budget: 75000  # ~75k parameters (baseline)
+      lora_r: 8
+      adapter_rf: 16
+
+    - budget: 150000  # ~150k parameters
+      lora_r: 16
+      adapter_rf: 8
+
+    - budget: 300000  # ~300k parameters
+      lora_r: 32
+      adapter_rf: 4
+
+  experiments:
+    - name: "E4_budget_{budget}_lora"
+      peft_method: "lora"
+
+    - name: "E4_budget_{budget}_adapter"
+      peft_method: "adapter"
+
+    - name: "E4_budget_{budget}_hybrid"
+      peft_method: "hybrid"
+
+# ====================================================================================
+# EXPERIMENT SET 5: Ablation Studies
+# Goal: Understand contribution of each component in hybrid method
+# ====================================================================================
+experiment_set_5_ablation:
+  description: "Ablation studies for hybrid method"
+
+  base_config:
+    dataset: "sst2"
+    epochs: 3
+    param_budget: 75000
+
+  experiments:
+    # Baseline: No PEFT (full fine-tuning)
+    - name: "E5_ablation_full_finetune"
+      peft_method: "none"  # Special case - train all parameters
+
+    # Single components
+    - name: "E5_ablation_lora_only"
+      peft_method: "lora"
+      lora_r: 8
+
+    - name: "E5_ablation_adapter_only"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+
+    # Hybrid variants
+    - name: "E5_ablation_hybrid_balanced"
+      peft_method: "hybrid"
+      lora_r: 4
+      adapter_reduction_factor: 32
+
+    - name: "E5_ablation_hybrid_lora_heavy"
+      peft_method: "hybrid"
+      lora_r: 6
+      adapter_reduction_factor: 48
+
+    - name: "E5_ablation_hybrid_adapter_heavy"
+      peft_method: "hybrid"
+      lora_r: 2
+      adapter_reduction_factor: 16
+
+# ====================================================================================
+# EXPERIMENT SET 6: Cross-Domain Transfer
+# Goal: Test transfer from multiple source domains to target
+# ====================================================================================
+experiment_set_6_cross_domain:
+  description: "Multi-source domain transfer to test generalization"
+
+  # All possible source-target combinations
+  transfers:
+    - sources: ["ag_news", "imdb"]
+      target: "sst2"
+      name: "E6_transfer_news_movie_to_sst2"
+
+    - sources: ["sst2", "imdb"]
+      target: "ag_news"
+      name: "E6_transfer_sentiment_to_news"
+
+    - sources: ["sst2", "ag_news"]
+      target: "imdb"
+      name: "E6_transfer_short_to_long"
+
+  base_config:
+    epochs: 3
+    param_budget: 75000
+
+# ====================================================================================
+# Quick Test Configuration (for debugging)
+# ====================================================================================
+quick_test:
+  description: "Quick test run with minimal resources"
+
+  experiments:
+    - name: "TEST_lora"
+      dataset: "sst2"
+      peft_method: "lora"
+      lora_r: 4
+      epochs: 1
+      batch_size: 32
+      few_shot_n: 16
+
+    - name: "TEST_adapter"
+      dataset: "sst2"
+      peft_method: "adapter"
+      adapter_reduction_factor: 16
+      epochs: 1
+      batch_size: 32
+      few_shot_n: 16
