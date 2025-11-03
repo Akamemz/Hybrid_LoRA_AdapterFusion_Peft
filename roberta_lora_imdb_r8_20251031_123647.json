@@ -1,0 +1,41 @@
+{
+  "experiment_name": "roberta_lora_imdb_r8",
+  "timestamp": "2025-10-31T12:27:18.320895",
+  "duration_seconds": 568.983845,
+  "config": {
+    "model": "roberta-base",
+    "dataset": "imdb",
+    "peft_method": "lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 512,
+    "lora_config": {
+      "r": 8,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1
+    }
+  },
+  "model_info": {
+    "total_parameters": 125534212,
+    "trainable_parameters": 887042,
+    "frozen_parameters": 124647170,
+    "peft_parameters": 294912,
+    "added_parameters": 294912,
+    "task_head_parameters": 592130,
+    "trainable_percentage": 0.7066137476531098,
+    "parameter_efficiency": 99.29338625234689
+  },
+  "eval_results": {
+    "eval_loss": 0.18763889372348785,
+    "eval_accuracy": 0.9328,
+    "eval_f1": 0.9327,
+    "eval_precision": 0.9342,
+    "eval_recall": 0.9312,
+    "eval_runtime": 9.6905,
+    "eval_samples_per_second": 257.985,
+    "eval_steps_per_second": 2.064,
+    "epoch": 3.0
+  }
+}
