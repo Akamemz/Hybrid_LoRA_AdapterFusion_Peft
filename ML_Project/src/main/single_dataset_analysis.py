@@ -601,7 +601,7 @@ class SingleDatasetAnalyzer:
         ax.set_title('Multi-Metric Comparison', fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(metric_labels)
-        ax.legend(loc='lower right', fontsize=8)
+        ax.legend(loc='upper right', fontsize=8)
         ax.grid(True, alpha=0.3, axis='y')
 
         # Dynamic y-axis based on all metric values
