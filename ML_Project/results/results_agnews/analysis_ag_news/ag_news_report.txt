@@ -1,0 +1,44 @@
+================================================================================
+BA-LORA VS LORA: AG_NEWS ANALYSIS REPORT
+================================================================================
+
+OVERALL RESULTS:
+--------------------------------------------------------------------------------
+BA-LoRA:
+  Experiments: 13
+  Accuracy:    0.9187 ± 0.0048
+  F1 Score:    0.9186 ± 0.0048
+  Avg Time:    24.3 minutes
+
+LoRA:
+  Experiments: 15
+  Accuracy:    0.9199 ± 0.0030
+  F1 Score:    0.9198 ± 0.0030
+  Avg Time:    26.9 minutes
+
+STATISTICAL ANALYSIS:
+--------------------------------------------------------------------------------
+Accuracy Delta:        -0.0012
+Welch's t-statistic:   -0.7680
+Welch's p-value:       0.4517
+Statistically significant: NO (p >= 0.05)
+
+PER-MODEL BREAKDOWN:
+--------------------------------------------------------------------------------
+DistilBERT:
+  BA-LoRA: 0.9146 ± 0.0035
+  LoRA:    0.9165 ± 0.0006
+  Delta:   -0.0018 (p=0.2687)
+
+RoBERTa:
+  BA-LoRA: 0.9223 ± 0.0021
+  LoRA:    0.9222 ± 0.0006
+  Delta:   +0.0000 (p=0.9772)
+
+CONCLUSION:
+================================================================================
+BA-LoRA does NOT show significant difference from standard LoRA on AG_NEWS.
+
+Training time overhead: -9.9%
+
+================================================================================

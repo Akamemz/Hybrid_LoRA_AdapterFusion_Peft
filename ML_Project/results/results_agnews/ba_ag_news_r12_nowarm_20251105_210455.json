@@ -1,0 +1,51 @@
+{
+  "experiment_name": "ba_ag_news_r12_nowarm",
+  "timestamp": "2025-11-05T20:51:43.423742",
+  "duration_seconds": 792.131674,
+  "config": {
+    "model": "distilbert-base-uncased",
+    "dataset": "ag_news",
+    "peft_method": "ba_lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 512,
+    "ba_lora_config": {
+      "base_rank": 12,
+      "gradient_samples": 5000,
+      "use_warmstart": false,
+      "alpha": 24
+    }
+  },
+  "model_info": {
+    "total_parameters": 67771400,
+    "trainable_parameters": 814852,
+    "frozen_parameters": 66956548,
+    "peft_parameters": 221184,
+    "added_parameters": 221184,
+    "task_head_parameters": 593668,
+    "trainable_percentage": 1.2023537952587668,
+    "parameter_efficiency": 98.79764620474123,
+    "budget_usage_percentage": 100.0,
+    "budget_remaining": 0,
+    "within_budget": true
+  },
+  "eval_results": {
+    "eval_loss": 0.22489416599273682,
+    "eval_accuracy": 0.9202,
+    "eval_f1": 0.92,
+    "eval_precision": 0.9204,
+    "eval_recall": 0.9202,
+    "eval_runtime": 15.5605,
+    "eval_samples_per_second": 771.183,
+    "eval_steps_per_second": 6.041,
+    "epoch": 3.0
+  },
+  "parameter_budget": {
+    "target": 221184,
+    "used": 221184,
+    "usage_percentage": 100.0,
+    "within_budget": true
+  }
+}

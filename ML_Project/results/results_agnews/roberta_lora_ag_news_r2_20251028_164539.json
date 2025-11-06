@@ -1,0 +1,41 @@
+{
+  "experiment_name": "roberta_lora_ag_news_r2",
+  "timestamp": "2025-10-28T16:15:05.923968",
+  "duration_seconds": 1833.688921,
+  "config": {
+    "model": "roberta-base",
+    "dataset": "ag_news",
+    "peft_method": "lora",
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 5e-05,
+    "seed": 42,
+    "max_length": 512,
+    "lora_config": {
+      "r": 2,
+      "lora_alpha": 16,
+      "lora_dropout": 0.1
+    }
+  },
+  "model_info": {
+    "total_parameters": 125316104,
+    "trainable_parameters": 667396,
+    "frozen_parameters": 124648708,
+    "peft_parameters": 73728,
+    "added_parameters": 73728,
+    "task_head_parameters": 593668,
+    "trainable_percentage": 0.5325700198914578,
+    "parameter_efficiency": 99.46742998010855
+  },
+  "eval_results": {
+    "eval_loss": 0.22622957825660706,
+    "eval_accuracy": 0.9219,
+    "eval_f1": 0.9218,
+    "eval_precision": 0.922,
+    "eval_recall": 0.9219,
+    "eval_runtime": 35.5963,
+    "eval_samples_per_second": 337.114,
+    "eval_steps_per_second": 2.641,
+    "epoch": 3.0
+  }
+}
