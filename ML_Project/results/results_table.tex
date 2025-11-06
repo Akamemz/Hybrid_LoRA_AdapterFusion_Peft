@@ -1,0 +1,23 @@
+\begin{table}[ht]
+\centering
+\caption{BA-LoRA vs LoRA: Multi-Dataset Performance Comparison}
+\label{tab:multi_dataset_results}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{Accuracy} & \textbf{F1} & \textbf{Precision} & \textbf{Recall} & \textbf{Time (min)} \\
+\midrule
+\multirow{2}{*}{SST2}
+ & BA-LoRA & 0.9076 & 0.9103 & 0.9016 & 0.9193 & 57.2 \\
+ & LoRA & 0.9107 & 0.9135 & 0.9032 & 0.9240 & 52.1 \\
+\midrule
+\multirow{2}{*}{IMDB}
+ & BA-LoRA & 0.9116 & 0.9112 & 0.9149 & 0.9075 & 5.9 \\
+ & LoRA & 0.9154 & 0.9153 & 0.9173 & 0.9133 & 7.5 \\
+\midrule
+\multirow{2}{*}{TWEET_EVAL}
+ & BA-LoRA & 0.7052 & 0.7063 & 0.7088 & 0.7052 & 5.5 \\
+ & LoRA & 0.7095 & 0.7106 & 0.7129 & 0.7095 & 5.6 \\
+\midrule
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,44 @@
+================================================================================
+BA-LORA VS LORA: IMDB ANALYSIS REPORT
+================================================================================
+
+OVERALL RESULTS:
+--------------------------------------------------------------------------------
+BA-LoRA:
+  Experiments: 13
+  Accuracy:    0.9116 ± 0.0212
+  F1 Score:    0.9112 ± 0.0215
+  Avg Time:    5.9 minutes
+
+LoRA:
+  Experiments: 13
+  Accuracy:    0.9154 ± 0.0200
+  F1 Score:    0.9153 ± 0.0199
+  Avg Time:    7.5 minutes
+
+STATISTICAL ANALYSIS:
+--------------------------------------------------------------------------------
+Accuracy Delta:        -0.0038
+Welch's t-statistic:   -0.4764
+Welch's p-value:       0.6381
+Statistically significant: NO (p >= 0.05)
+
+PER-MODEL BREAKDOWN:
+--------------------------------------------------------------------------------
+DistilBERT:
+  BA-LoRA: 0.8901 ± 0.0061
+  LoRA:    0.8947 ± 0.0010
+  Delta:   -0.0046 (p=0.1240)
+
+RoBERTa:
+  BA-LoRA: 0.9300 ± 0.0031
+  LoRA:    0.9332 ± 0.0008
+  Delta:   -0.0032 (p=0.0362)
+
+CONCLUSION:
+================================================================================
+BA-LoRA does NOT show significant difference from standard LoRA on IMDB.
+
+Training time overhead: -21.1%
+
+================================================================================
