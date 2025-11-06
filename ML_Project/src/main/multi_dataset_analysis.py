@@ -41,23 +41,33 @@ class MultiDatasetAnalyzer:
         """Load all experiment results into a DataFrame"""
         all_results = []
 
-        for json_file in self.results_dir.glob("*.json"):
+        # 🔹 Scan recursively across all subfolders for JSON files
+        for json_file in self.results_dir.rglob("*.json"):
             try:
                 with open(json_file, 'r') as f:
                     data = json.load(f)
+
+                # Skip non-eval/trainer files
+                if not isinstance(data, dict):
+                    continue
+                if 'eval_results' not in data or 'config' not in data:
+                    continue
+                if 'eval_accuracy' not in data.get('eval_results', {}):
+                    continue
 
                 # Extract key information
                 row = {
                     'experiment': data.get('experiment_name', ''),
                     'method': data.get('config', {}).get('peft_method', ''),
-                    'dataset': data.get('config', {}).get('dataset', ''),
+                    'dataset': data.get('config', {}).get('dataset', '').lower(),
                     'model': data.get('config', {}).get('model', ''),
                     'accuracy': data.get('eval_results', {}).get('eval_accuracy', 0),
                     'f1': data.get('eval_results', {}).get('eval_f1', 0),
                     'precision': data.get('eval_results', {}).get('eval_precision', 0),
                     'recall': data.get('eval_results', {}).get('eval_recall', 0),
                     'train_time': data.get('duration_seconds', 0) / 60,  # minutes
-                    'trainable_params': data.get('model_info', {}).get('peft_parameters', 0),
+                    'trainable_params': data.get('model_info', {}).get('peft_parameters',
+                                                                       data.get('model_info', {}).get('trainable_parameters', 0)),
                     'total_params': data.get('model_info', {}).get('total_parameters', 0),
                 }
 
@@ -73,10 +83,15 @@ class MultiDatasetAnalyzer:
                 all_results.append(row)
 
             except Exception as e:
-                print(f"Error loading {json_file}: {e}")
+                print(f"⚠️  Error loading {json_file}: {e}")
+
+        if not all_results:
+            print("⚠️  No valid experiment results found!")
+            self.results_df = pd.DataFrame()
+            return self.results_df
 
         self.results_df = pd.DataFrame(all_results)
-        print(f"Loaded {len(self.results_df)} results across {self.results_df['dataset'].nunique()} datasets")
+        print(f"✓ Loaded {len(self.results_df)} results across {self.results_df['dataset'].nunique()} datasets")
         return self.results_df
 
     def statistical_comparison(self, df: pd.DataFrame, dataset: str) -> Dict:
