@@ -6,7 +6,7 @@
 
 **An empirical investigation of gradient-based adaptive rank allocation for parameter-efficient fine-tuning**
 
-> **TL;DR**: We rigorously test whether adaptive rank allocation based on gradient importance can improve upon LoRA's uniform allocation. Our controlled evaluation reveals that gradient-based adaptation does not universally improve performance, and we identify *why* through systematic analysis. This work contributes fair comparison methodology and realistic expectations for adaptive PEFT methods.
+> **TL;DR**: We rigorously test whether adaptive rank allocation based on gradient importance can improve upon LoRA's uniform allocation. Our controlled evaluation reveals that gradient-based adaptation does not universally improve performance, and we identify *why* through systematic analysis. This work contributes a fair comparison methodology and realistic expectations for adaptive PEFT methods.
 
 ---
 
@@ -111,9 +111,8 @@ Hybrid_LoRA_AdapterFusion_Peft/
 │   │   └── results_sst2/                       # Experiment results (JSON)
 │   ├── configs/
 │   │   └── experiment_configs.yaml             # Hyperparameters
-│   └── research_paper/
-│       ├── BA_LoRA_Defense_Framework.md        # How to frame negative results
-│       └── BA_LoRA_Report_Template.md          # Full report template
+│   ├── research_paper                          # TODO: Manuscript
+│   └── demo                                    # TODO: Polish demo
 ├── requirements.txt
 └── README.md
 ```
